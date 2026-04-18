@@ -1,0 +1,199 @@
+
+<h2 class="sr-only">Interactive map of 47 NYC bucket list locations with color coded markers on a grayscale map</h2>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+#wrap{font-family:var(--font-sans,system-ui);display:flex;flex-direction:column;gap:10px;padding:8px 0}
+#controls{display:flex;gap:6px;flex-wrap:wrap}
+.fb{padding:5px 13px;border-radius:20px;border:0.5px solid var(--color-border-secondary,#ccc);background:var(--color-background-primary,#fff);color:var(--color-text-secondary,#555);font-size:13px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.fb[data-c="all"].on{background:#333;color:#fff;border-color:#333}
+.fb[data-c="sights"].on{background:#185FA5;color:#fff;border-color:#185FA5}
+.fb[data-c="food"].on{background:#0F6E56;color:#fff;border-color:#0F6E56}
+.fb[data-c="shows"].on{background:#993C1D;color:#fff;border-color:#993C1D}
+#map-wrap{position:relative;width:100%;height:520px;border-radius:12px;overflow:hidden;border:0.5px solid var(--color-border-tertiary,#ddd)}
+#map{width:100%;height:100%}
+#map .leaflet-tile-pane{filter:grayscale(100%) contrast(0.85) brightness(1.1)}
+#panel{
+  position:absolute;top:10px;right:10px;width:210px;
+  max-height:calc(100% - 20px);
+  display:flex;flex-direction:column;
+  background:#fff;border-radius:10px;
+  border:1px solid rgba(0,0,0,0.15);
+  box-shadow:0 4px 20px rgba(0,0,0,0.18);
+  z-index:1000;overflow:hidden;
+}
+#panel-head{padding:10px 12px;font-weight:500;font-size:13px;border-bottom:1px solid rgba(0,0,0,0.1);color:#111;flex-shrink:0;background:#fff}
+#place-list{overflow-y:auto;flex:1}
+.pi{padding:7px 12px;border-bottom:0.5px solid rgba(0,0,0,0.07);cursor:pointer;display:flex;align-items:center;gap:8px;color:#555;font-size:12px;transition:background .1s}
+.pi:hover{background:#f5f5f5}
+.pi.hide{display:none}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+#infobox{
+  position:absolute;bottom:10px;left:10px;
+  width:calc(100% - 240px);
+  background:#fff;border-radius:10px;
+  border:1px solid rgba(0,0,0,0.15);
+  box-shadow:0 4px 20px rgba(0,0,0,0.18);
+  padding:10px 14px;font-size:13px;
+  z-index:1000;display:none;
+}
+#infobox .iname{font-weight:500;font-size:14px;color:#111;margin-bottom:2px}
+#infobox .icat{font-size:11px;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.04em}
+#infobox .inote{font-size:12px;color:#444;line-height:1.4}
+#ix{float:right;cursor:pointer;color:#aaa;font-size:18px;line-height:1;margin-left:8px;margin-top:-2px}
+@media(max-width:540px){
+  #map-wrap{height:420px}
+  #panel{width:160px}
+  #panel-head{font-size:12px;padding:8px 10px}
+  .pi{padding:6px 10px;font-size:11px}
+  #infobox{width:calc(100% - 180px)}
+}
+@media(max-width:400px){
+  #map-wrap{height:380px}
+  #panel{display:none}
+  #infobox{width:calc(100% - 20px);left:10px}
+}
+</style>
+
+<div id="wrap">
+  <div id="controls">
+    <button class="fb on" data-c="all">All (47)</button>
+    <button class="fb" data-c="sights">Sights</button>
+    <button class="fb" data-c="food">Food &amp; drinks</button>
+    <button class="fb" data-c="shows">Broadway</button>
+  </div>
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="panel">
+      <div id="panel-head">Your NYC list</div>
+      <div id="place-list"></div>
+    </div>
+    <div id="infobox">
+      <span id="ix">×</span>
+      <div class="iname" id="iname"></div>
+      <div class="icat" id="icat"></div>
+      <div class="inote" id="inote"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const PLACES=[
+  {n:"The MET",c:"sights",lat:40.7794,lng:-73.9632,note:"One of the world's great museums — allow at least 3 hours."},
+  {n:"The MOMA",c:"sights",lat:40.7614,lng:-73.9776,note:"Home to Starry Night, Picasso & countless modern masterpieces."},
+  {n:"Times Square",c:"sights",lat:40.7580,lng:-73.9855,note:"The neon-lit crossroads of the world — best at night."},
+  {n:"Statue of Liberty",c:"sights",lat:40.6892,lng:-74.0445,note:"Book ferry tickets in advance — pedestal & crown access sell out fast."},
+  {n:"Brooklyn Bridge",c:"sights",lat:40.7061,lng:-73.9969,note:"Walk across for stunning Manhattan skyline views. Go early to beat crowds."},
+  {n:"DUMBO",c:"sights",lat:40.7033,lng:-73.9881,note:"Down Under the Manhattan Bridge Overpass — iconic bridge photo spot on Washington St."},
+  {n:"Grand Central Station",c:"sights",lat:40.7534,lng:-73.9768,note:"Marvel at the celestial ceiling and Beaux-Arts architecture."},
+  {n:"Empire State Building",c:"sights",lat:40.7484,lng:-73.9857,note:"Two observation decks on floors 86 & 102. Book tickets online."},
+  {n:"Flatiron Building",c:"sights",lat:40.7411,lng:-73.9897,note:"Iconic triangular skyscraper at Broadway & 5th Ave."},
+  {n:"9/11 Memorial & Museum",c:"sights",lat:40.7116,lng:-74.0133,note:"A deeply moving tribute. Book museum tickets ahead of time."},
+  {n:"Little Italy",c:"sights",lat:40.7191,lng:-73.9973,note:"Historic neighborhood great for food, espresso & atmosphere."},
+  {n:"St. Patrick's Cathedral",c:"sights",lat:40.7586,lng:-73.9762,note:"Stunning Gothic Revival cathedral on 5th Ave. Free to enter."},
+  {n:"Harry Potter Shop",c:"sights",lat:40.7406,lng:-73.9896,note:"Wizarding World flagship store near the Flatiron. Butterbeer bar inside!"},
+  {n:"FAO Schwarz",c:"sights",lat:40.7588,lng:-73.9793,note:"Legendary toy store in Rockefeller Center — giant floor piano!"},
+  {n:"Rockefeller Center",c:"sights",lat:40.7587,lng:-73.9787,note:"Top of the Rock has some of NYC's best views, including the Empire State."},
+  {n:"Central Park",c:"sights",lat:40.7826,lng:-73.9656,note:"Bow Bridge, Bethesda Fountain, Belvedere Castle & The Mall."},
+  {n:"Washington Square Park",c:"sights",lat:40.7309,lng:-73.9973,note:"Iconic arch, street performers & the heart of Greenwich Village."},
+  {n:"Battery Park",c:"sights",lat:40.7029,lng:-74.0154,note:"Waterfront park with Statue of Liberty views. Ferry departs from here."},
+  {n:"Los Tacos No. 1",c:"food",lat:40.7573,lng:-73.9877,note:"Legendary tacos near Times Square. Carne asada is a must."},
+  {n:"Ess-a-Bagel",c:"food",lat:40.7562,lng:-73.9702,note:"Classic NYC bagels. Go early to beat the line."},
+  {n:"Liberty Bagels",c:"food",lat:40.7525,lng:-73.9925,note:"Famous for colorful rainbow bagels. Expect a wait — worth it!"},
+  {n:"Tompkins Square Bagels",c:"food",lat:40.7282,lng:-73.9823,note:"Beloved East Village bagel shop with tons of variety."},
+  {n:"Russ & Daughters",c:"food",lat:40.7226,lng:-73.9883,note:"Legendary appetizing shop since 1914. Smoked fish & bagels."},
+  {n:"Venchi Gelato",c:"food",lat:40.7374,lng:-73.9905,note:"Italian gelato & chocolatier near Union Square."},
+  {n:"Doughnut Plant",c:"food",lat:40.7163,lng:-73.9886,note:"Creative handcrafted doughnuts on the Lower East Side."},
+  {n:"Salswee Bakery",c:"food",lat:40.7532,lng:-73.9874,note:"Beautiful artisan pastries & mini cakes in Midtown."},
+  {n:"Ferrara Bakery",c:"food",lat:40.7191,lng:-73.9971,note:"Little Italy institution since 1892 — cannolis & espresso."},
+  {n:"Gray's Papaya",c:"food",lat:40.7784,lng:-73.9816,note:"Iconic NYC hot dog spot. Cheap, fast & delicious."},
+  {n:"Joe's Pizza",c:"food",lat:40.7547,lng:-73.9870,note:"Classic New York slice near Times Square. Open until 3–5am!"},
+  {n:"Pizza Suprema",c:"food",lat:40.7502,lng:-73.9953,note:"Best slice near Madison Square Garden. A true NYC staple."},
+  {n:"L'Industria Pizzeria",c:"food",lat:40.7116,lng:-73.9579,note:"Williamsburg darling — try the burrata or pesto slice."},
+  {n:"Artichoke Basille's",c:"food",lat:40.7322,lng:-73.9838,note:"Massive, creamy artichoke slice. Open until 5am!"},
+  {n:"Van Leeuwen Ice Cream",c:"food",lat:40.7277,lng:-73.9877,note:"Artisan ice cream in the East Village with unique seasonal flavors."},
+  {n:"The Halal Guys",c:"food",lat:40.7618,lng:-73.9794,note:"The original halal cart. White sauce is non-negotiable."},
+  {n:"Milk Bar",c:"food",lat:40.7458,lng:-73.9884,note:"Birthday cake truffles, compost cookies & crack pie."},
+  {n:"Black Tap",c:"food",lat:40.7501,lng:-73.9860,note:"Craft burgers & outrageously decadent milkshakes."},
+  {n:"Mille-Feuille Bakery",c:"food",lat:40.7292,lng:-73.9983,note:"French bakery near Washington Sq Park — mille-feuille & cream puffs."},
+  {n:"Bluestone Lane",c:"food",lat:40.7838,lng:-73.9585,note:"Australian-style café for breakfast or lunch near Central Park."},
+  {n:"Dominique Ansel Bakery",c:"food",lat:40.7253,lng:-74.0029,note:"Home of the original Cronut. Monthly rotating flavors — go early!"},
+  {n:"Supermoon Bakehouse",c:"food",lat:40.7198,lng:-73.9872,note:"Creative pastries (croque monsieur, ube eclairs) on the LES."},
+  {n:"Petit Chou Bakery",c:"food",lat:40.7311,lng:-73.9831,note:"Charming East Village patisserie with outstanding choux pastries."},
+  {n:"Ambassador Theatre",c:"shows",lat:40.7613,lng:-73.9851,note:"Chicago the musical — a razor-sharp classic near Times Square."},
+  {n:"Lyric Theatre",c:"shows",lat:40.7570,lng:-73.9875,note:"Harry Potter & the Cursed Child — truly magical stage production."},
+  {n:"Minskoff Theatre",c:"shows",lat:40.7579,lng:-73.9861,note:"The Lion King — stunning costumes, music & puppetry on Broadway."},
+];
+
+const COLORS={sights:"#185FA5",food:"#0F6E56",shows:"#993C1D"};
+const LABELS={sights:"Sights & culture",food:"Food & drinks",shows:"Broadway shows"};
+
+function makeIcon(p){
+  const col=COLORS[p.c];
+  return L.divIcon({
+    className:"",
+    html:`<div style="width:13px;height:13px;border-radius:50%;background:${col};border:2.5px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,0.35);"></div>`,
+    iconSize:[13,13],iconAnchor:[6,6]
+  });
+}
+
+let filter="all";
+const markers=[];
+
+const map=L.map("map",{zoomControl:true}).setView([40.740,-73.985],13);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{
+  attribution:"© OpenStreetMap, © CARTO",maxZoom:19
+}).addTo(map);
+
+map.whenReady(()=>{
+  document.querySelectorAll(".leaflet-tile-pane").forEach(el=>{
+    el.style.filter="grayscale(100%) contrast(0.85) brightness(1.1)";
+  });
+});
+
+const list=document.getElementById("place-list");
+
+PLACES.forEach(p=>{
+  const marker=L.marker([p.lat,p.lng],{icon:makeIcon(p)}).addTo(map);
+  marker.on("click",()=>showInfo(p));
+  markers.push({marker,p});
+
+  const el=document.createElement("div");
+  el.className="pi";
+  el.dataset.c=p.c;
+  el.innerHTML=`<div class="dot" style="background:${COLORS[p.c]}"></div><span>${p.n}</span>`;
+  el.addEventListener("click",()=>{map.setView([p.lat,p.lng],16);showInfo(p);});
+  list.appendChild(el);
+});
+
+function showInfo(p){
+  document.getElementById("iname").textContent=p.n;
+  const cat=document.getElementById("icat");
+  cat.textContent=LABELS[p.c];
+  cat.style.color=COLORS[p.c];
+  document.getElementById("inote").textContent=p.note;
+  document.getElementById("infobox").style.display="block";
+}
+
+document.querySelectorAll(".fb").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    filter=btn.dataset.c;
+    document.querySelectorAll(".fb").forEach(b=>b.classList.remove("on"));
+    btn.classList.add("on");
+    markers.forEach(({marker,p})=>{
+      filter==="all"||p.c===filter?marker.addTo(map):map.removeLayer(marker);
+    });
+    document.querySelectorAll(".pi").forEach(el=>{
+      el.classList.toggle("hide",filter!=="all"&&el.dataset.c!==filter);
+    });
+    document.getElementById("infobox").style.display="none";
+  });
+});
+
+document.getElementById("ix").addEventListener("click",()=>{
+  document.getElementById("infobox").style.display="none";
+});
+</script>
